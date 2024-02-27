@@ -1,6 +1,8 @@
+
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { ClientApplication } from "@/components/client-application";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -15,14 +17,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
 
-  /* redirect logic */
-
   return (
     <html lang="en">
       <body className={inter.className}>
-        
-        {/* Navigation bar */}
-        {children}
+        <ClientApplication>
+          {children}
+        </ClientApplication>
       </body>
     </html>
   );
