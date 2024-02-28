@@ -11,6 +11,12 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -18,13 +24,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { TASK_COLLECTION } from "@/constants";
+import { auth, db } from "@/firebase";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { addDoc, collection } from "firebase/firestore";
 import Image from "next/image";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
-const ALL_STATUS = ["todo", "progress", "completed"] as const;
 const formSchema = z.object({
   title: z
     .string({
@@ -32,20 +43,53 @@ const formSchema = z.object({
     })
     .min(1, "Title is required"),
   description: z.string().optional(),
-  status: z.enum(ALL_STATUS, {
+  status: z.string({
     invalid_type_error: "",
     required_error: "Please add a status",
   }),
+  dueDate: z.coerce.date({
+    errorMap: (issue, ctx) => {
+      switch (issue.code) {
+        case "invalid_date":
+        case "invalid_type":
+          return { message: "Please add a due date" };
+        default:
+          return { message: "Please add a due date" };
+      }
+    },
+  }),
 });
+
 export default function NewTaskPage() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {},
   });
-  const onSubmit = async (args: z.infer<typeof formSchema>) => {
-    const { title, description, status } = args;
 
+  const onSubmit = async (args: z.infer<typeof formSchema>) => {
+    const { title, description, status, dueDate } = args;
+
+    console.log(args);
     // create new task
+    try {
+      const createdBy = auth.currentUser?.uid;
+      await addDoc(collection(db, TASK_COLLECTION), {
+        createdBy,
+        title,
+        description,
+        status,
+        dueDate,
+      });
+    } catch (error) {
+      console.log(error);
+    } finally {
+      form.reset({
+        description: "",
+        title: "",
+        dueDate: undefined,
+        status: "",
+      });
+    }
   };
 
   return (
@@ -60,6 +104,7 @@ export default function NewTaskPage() {
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <div className="flex flex-col gap-y-4">
+              {/* Title input */}
               <FormField
                 control={form.control}
                 name="title"
@@ -77,6 +122,8 @@ export default function NewTaskPage() {
                   </FormItem>
                 )}
               />
+
+              {/* Description text area */}
               <FormField
                 control={form.control}
                 name="description"
@@ -96,6 +143,7 @@ export default function NewTaskPage() {
                 )}
               />
 
+              {/* Status select */}
               <FormField
                 control={form.control}
                 name="status"
@@ -105,6 +153,7 @@ export default function NewTaskPage() {
                     <Select
                       onValueChange={field.onChange}
                       defaultValue={field.value}
+                      value={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -121,6 +170,47 @@ export default function NewTaskPage() {
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="dueDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Due Date</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {field.value ? (
+                              format(field.value, "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={(date) => {
+                            field.onChange(date);
+                          }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <Button
                 type="submit"
                 variant="secondary"
