@@ -21,7 +21,6 @@ export default function UpdateTaskPage(props: { params: { taskId: string } }) {
           ...querySnapshot.data(),
           dueDate: querySnapshot.data()?.dueDate.toDate(),
         } as any);
-        console.log(querySnapshot);
       } catch (error) {
         console.log(error);
       }

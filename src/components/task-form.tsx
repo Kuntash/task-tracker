@@ -25,9 +25,16 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { auth, db } from "@/firebase";
-import { addDoc, collection, doc, updateDoc } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  updateDoc,
+} from "firebase/firestore";
 import { TASK_COLLECTION } from "@/constants";
 import { format } from "date-fns";
+import { useRouter } from "next/navigation";
 
 type TaskFormProps = {
   type: "update" | "create";
@@ -62,6 +69,7 @@ const formSchema = z.object({
 export const TaskForm = (props: TaskFormProps) => {
   const { type, defaultValues, taskId } = props;
 
+  const router = useRouter();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: !!defaultValues ? defaultValues : {},
@@ -105,6 +113,14 @@ export const TaskForm = (props: TaskFormProps) => {
     }
   };
 
+  const deleteTask = async () => {
+    try {
+      await deleteDoc(doc(db, TASK_COLLECTION, taskId as string));
+      router.push("/dashboard");
+    } catch (error) {
+      console.log(error);
+    }
+  };
   useEffect(() => {
     form.reset(defaultValues);
   }, [defaultValues]);
@@ -227,6 +243,16 @@ export const TaskForm = (props: TaskFormProps) => {
           >
             {type === "create" ? "Create task" : "Update task"}
           </Button>
+          {type === "update" && (
+            <Button
+              variant="destructive"
+              onClick={() => {
+                deleteTask();
+              }}
+            >
+              Delete task
+            </Button>
+          )}
         </div>
       </form>
     </Form>
