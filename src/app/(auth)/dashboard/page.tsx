@@ -1,13 +1,16 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
 import { TASK_COLLECTION } from "@/constants";
-import { db } from "@/firebase";
-import { Task } from "@/types";
-import { collection, getDocs } from "firebase/firestore";
-import Link from "next/link";
+import { useUserContext } from "@/context/user-context";
+import { auth, db } from "@/firebase";
+import { Column, Task } from "@/types";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { format } from "date-fns";
+import { Input } from "@/components/ui/input";
 
 const statusFilterValues = [
   {
@@ -28,12 +31,79 @@ const statusFilterValues = [
   },
 ];
 
+const statusMap = {
+  all: "All",
+  todo: "To do",
+  progress: "In progress",
+  completed: "Completed",
+};
+
+const taskColumns: Column[] = [
+  {
+    id: "renderId",
+    label: "Id",
+  },
+  {
+    id: "title",
+    label: "Title",
+  },
+  {
+    id: "description",
+    label: "Description",
+  },
+  {
+    id: "status",
+    label: "Status",
+  },
+  {
+    id: "dueDate",
+    label: "Due date",
+  },
+];
+
 export default function AllTasksPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const user = useUserContext();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
+  const [searchString, setSearchString] = useState("");
+
+  const filterByStatus = (filterId: string, argTasks: Task[]) => {
+    if (filterId === "all") return argTasks;
+    return argTasks.filter((task) => task.status === filterId);
+  };
+
+  const formattedTasks = useMemo(() => {
+    let tempTasks: any[];
+    if (!!searchParams.get("status")) {
+      tempTasks = filterByStatus(searchParams.get("status") as string, tasks);
+    } else {
+      tempTasks = tasks;
+    }
+
+    if (!!searchString)
+      tempTasks = tempTasks.filter((task) => {
+        const texts = [task.title, task.description].join(" ").toLowerCase();
+        return texts.includes(searchString.toLowerCase());
+      });
+
+    return tempTasks?.map((task) => {
+      return {
+        renderId: task.id.substring(0, 4),
+        id: task.id,
+        dueDate: format(task.dueDate, "MMM dd"),
+        title: task.title,
+        ...(task.description && {
+          description:
+            task?.description?.length > 50
+              ? `${task.description.substring(0, 50)}...`
+              : task.description,
+        }),
+        status: statusMap?.[task.status as keyof typeof statusMap],
+      };
+    });
+  }, [tasks, searchString, searchParams]);
 
   const createQueryString = useCallback(
     (name: string, value: string) => {
@@ -49,7 +119,11 @@ export default function AllTasksPage() {
     // fetching tasks from firebase database.
     const fetchTasks = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, TASK_COLLECTION));
+        const q = query(
+          collection(db, TASK_COLLECTION),
+          where("createdBy", "==", user?.id)
+        );
+        const querySnapshot = await getDocs(q);
         let tempTask: Task[] = [];
         querySnapshot.forEach((doc) => {
           tempTask.push({
@@ -59,35 +133,22 @@ export default function AllTasksPage() {
           } as Task);
         });
         setTasks(tempTask);
-        if (!!searchParams.get("status")) {
-          setFilteredTasks(
-            filterByStatus(searchParams.get("status") as string, tempTask)
-          );
-        } else {
-          setFilteredTasks(tempTask);
-        }
-        console.log(tempTask);
       } catch (error) {
         console.log(error);
       }
     };
-    fetchTasks();
-  }, []);
 
-  const filterByStatus = (filterId: string, argTasks: Task[]) => {
-    if (filterId === "all") return argTasks;
-    return argTasks.filter((task) => task.status === filterId);
-  };
+    if (!!user?.id) fetchTasks();
+  }, [user]);
 
   const handleSetFilter = (filterId: string) => {
-    setFilteredTasks(filterByStatus(filterId, tasks));
     router.push(`${pathname}?${createQueryString("status", filterId)}`);
   };
 
   return (
     <main className="min-h-screen flex justify-center pt-6">
       {/* all tasks page */}
-      <div className="flex flex-col lg:w-[1000px] md:w-[700px] w-[320px]">
+      <div className="flex flex-col lg:w-[1000px] md:w-[700px] sm:w-[480px] w-[320px]">
         <h2 className="text-3xl font-semibold mb-6">Tasks</h2>
         <section className="flex flex-col gap-y-4">
           <h3 className="text-xl font-semibold">Filter by status</h3>
@@ -107,11 +168,18 @@ export default function AllTasksPage() {
                   {statusFilterValue.label}
                 </Button>
               ))}
+
+              <Input
+                placeholder="Search task"
+                value={searchString}
+                onChange={(e) => setSearchString(e.target.value as string)}
+              />
             </div>
-            <Link href="/dashboard/new-task">
-              <Button variant="secondary">Add new task</Button>
-            </Link>
           </div>
+
+          {formattedTasks?.length > 0 && (
+            <DataTable columns={taskColumns} data={formattedTasks} />
+          )}
         </section>
       </div>
     </main>

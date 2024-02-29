@@ -69,7 +69,6 @@ export default function NewTaskPage() {
   const onSubmit = async (args: z.infer<typeof formSchema>) => {
     const { title, description, status, dueDate } = args;
 
-    console.log(args);
     // create new task
     try {
       const createdBy = auth.currentUser?.uid;

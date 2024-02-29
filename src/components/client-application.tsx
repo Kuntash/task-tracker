@@ -1,8 +1,9 @@
 "use client";
+import { UserContextProvider } from "@/context/user-context";
 import { auth } from "@/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { User, onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import React, { Fragment, ReactNode, useEffect } from "react";
+import React, { Fragment, ReactNode, useEffect, useState } from "react";
 
 export type ClientApplicationProps = {
   children: ReactNode;
@@ -10,12 +11,12 @@ export type ClientApplicationProps = {
 export const ClientApplication = (props: ClientApplicationProps) => {
   const { children } = props;
   const router = useRouter();
-
+  const [user, setUser] = useState<User>();
   /* authentication redirect logic */
   const handleLoginRedirect = () => {
     onAuthStateChanged(auth, (user) => {
       if (user) {
-        console.log(user);
+        setUser(user);
       } else {
         router.replace("/login");
       }
@@ -25,5 +26,13 @@ export const ClientApplication = (props: ClientApplicationProps) => {
   useEffect(() => {
     handleLoginRedirect();
   }, []);
-  return <Fragment>{children}</Fragment>;
+  return (
+    <UserContextProvider
+      value={{
+        id: user?.uid ?? "",
+      }}
+    >
+      {children}
+    </UserContextProvider>
+  );
 };
